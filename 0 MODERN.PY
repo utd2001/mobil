@@ -3,21 +3,12 @@ from tkinter import ttk
 from datetime import datetime, timedelta
 from tkcalendar import DateEntry
 import tkinter.messagebox as messagebox
-
-# Varsayılan değerler
-saved_data = {
-    'start_date': datetime.now().strftime("%d.%m.%Y %H:%M"),
-    'end_date': (datetime.now() + timedelta(days=30)).strftime("%d.%m.%Y %H:%M"), 
-    'remaining_mb': "0",
-    'total_gb': "0",
-    'target_profit': "0",
-    'target_limit': "0"
-}
+import json
+import os
 
 # Veri kaydetme ve yükleme fonksiyonları
 def save_data():
-    global saved_data
-    saved_data = {
+    data = {
         'start_date': start_datetime_entry.get_datetime().strftime("%d.%m.%Y %H:%M"),
         'end_date': end_datetime_entry.get_datetime().strftime("%d.%m.%Y %H:%M"),
         'remaining_mb': entry_remaining_mb.get(),
@@ -25,38 +16,47 @@ def save_data():
         'target_profit': entry_target_profit.get(),
         'target_limit': entry_target_limit.get()
     }
+    try:
+        with open('internet_data.json', 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        messagebox.showerror("Hata", "Veriler kaydedilirken hata oluştu!")
 
 def load_data():
     try:
-        # Tarihleri ayarla
-        start_date = datetime.strptime(saved_data['start_date'], "%d.%m.%Y %H:%M")
-        end_date = datetime.strptime(saved_data['end_date'], "%d.%m.%Y %H:%M")
-        
-        # Tarih ve saat ayarla
-        start_datetime_entry.date_picker.delete(0, tk.END)
-        start_datetime_entry.date_picker.insert(0, start_date.strftime("%d.%m.%Y"))
-        start_datetime_entry.time_entry.set_time(start_date.strftime("%H:%M"))
-        
-        end_datetime_entry.date_picker.delete(0, tk.END)
-        end_datetime_entry.date_picker.insert(0, end_date.strftime("%d.%m.%Y"))
-        end_datetime_entry.time_entry.set_time(end_date.strftime("%H:%M"))
-        
-        # MB ve GB değerlerini ayarla
-        entry_remaining_mb.delete(0, tk.END)
-        entry_remaining_mb.insert(0, saved_data['remaining_mb'])
-        entry_total_gb.delete(0, tk.END)
-        entry_total_gb.insert(0, saved_data['total_gb'])
-        
-        # Hedef değerleri ayarla
-        if 'target_profit' in saved_data:
-            entry_target_profit.delete(0, tk.END)
-            entry_target_profit.insert(0, saved_data['target_profit'])
-        if 'target_limit' in saved_data:
-            entry_target_limit.delete(0, tk.END)
-            entry_target_limit.insert(0, saved_data['target_limit'])
-        
-        # Hesaplamaları güncelle
-        calculate()
+        if os.path.exists('internet_data.json'):
+            with open('internet_data.json', 'r') as f:
+                data = json.load(f)
+                
+                # Tarihleri ayarla
+                start_date = datetime.strptime(data['start_date'], "%d.%m.%Y %H:%M")
+                end_date = datetime.strptime(data['end_date'], "%d.%m.%Y %H:%M")
+                
+                # Tarih ve saat ayarla
+                start_datetime_entry.date_picker.delete(0, tk.END)
+                start_datetime_entry.date_picker.insert(0, start_date.strftime("%d.%m.%Y"))
+                start_datetime_entry.time_entry.set_time(start_date.strftime("%H:%M"))
+                
+                end_datetime_entry.date_picker.delete(0, tk.END)
+                end_datetime_entry.date_picker.insert(0, end_date.strftime("%d.%m.%Y"))
+                end_datetime_entry.time_entry.set_time(end_date.strftime("%H:%M"))
+                
+                # MB ve GB değerlerini ayarla
+                entry_remaining_mb.delete(0, tk.END)
+                entry_remaining_mb.insert(0, data['remaining_mb'])
+                entry_total_gb.delete(0, tk.END)
+                entry_total_gb.insert(0, data['total_gb'])
+                
+                # Hedef değerleri ayarla
+                if 'target_profit' in data:
+                    entry_target_profit.delete(0, tk.END)
+                    entry_target_profit.insert(0, data['target_profit'])
+                if 'target_limit' in data:
+                    entry_target_limit.delete(0, tk.END)
+                    entry_target_limit.insert(0, data['target_limit'])
+                
+                # Hesaplamaları güncelle
+                calculate()
     except Exception as e:
         pass
 
@@ -395,7 +395,7 @@ label_days_for_limit = ttk.Label(limit_frame, text="--", style='InfoLabel.TLabel
 label_days_for_limit.pack(padx=5, pady=5)
 
 # Hesaplama butonu
-button_calculate = ttk.Button(root, text="Kaydet", command=save_data)
+button_calculate = ttk.Button(root, text="Hesapla", command=calculate)
 button_calculate.pack(pady=10)
 
 # Pencere kapanırken verileri kaydet
