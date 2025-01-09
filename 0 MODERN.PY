@@ -31,8 +31,15 @@ def load_data():
                 # Tarihleri ayarla
                 start_date = datetime.strptime(data['start_date'], "%d.%m.%Y %H:%M")
                 end_date = datetime.strptime(data['end_date'], "%d.%m.%Y %H:%M")
-                start_datetime_entry.set_datetime(start_date)
-                end_datetime_entry.set_datetime(end_date)
+                
+                # Tarih ve saat ayarla
+                start_datetime_entry.date_picker.delete(0, tk.END)
+                start_datetime_entry.date_picker.insert(0, start_date.strftime("%d.%m.%Y"))
+                start_datetime_entry.time_entry.set_time(start_date.strftime("%H:%M"))
+                
+                end_datetime_entry.date_picker.delete(0, tk.END)
+                end_datetime_entry.date_picker.insert(0, end_date.strftime("%d.%m.%Y"))
+                end_datetime_entry.time_entry.set_time(end_date.strftime("%H:%M"))
                 
                 # MB ve GB değerlerini ayarla
                 entry_remaining_mb.delete(0, tk.END)
@@ -98,18 +105,9 @@ class DateTimeEntry(tk.Frame):
         self.configure(bg='#2b2b2b')
         
         # Tarih seçici
-        self.date_picker = DateEntry(
+        self.date_picker = ttk.Entry(
             self, width=12,
-            background='#404040',
-            foreground='white',
-            borderwidth=2,
-            date_pattern='dd.mm.yyyy',
-            selectbackground='#606060',
-            selectforeground='white',
-            normalbackground='#404040',
-            normalforeground='white',
-            headersbackground='#404040',
-            headersforeground='white'
+            style='Dark.TEntry'
         )
         self.date_picker.pack(side=tk.LEFT, padx=5)
         
@@ -123,7 +121,8 @@ class DateTimeEntry(tk.Frame):
         return datetime.strptime(f"{date_str} {time_str}", "%d.%m.%Y %H:%M")
 
     def set_datetime(self, dt):
-        self.date_picker.set_date(dt)
+        self.date_picker.delete(0, tk.END)
+        self.date_picker.insert(0, dt.strftime("%d.%m.%Y"))
         self.time_entry.set_time(dt.strftime("%H:%M"))
 
 def format_timedelta(td):
@@ -202,7 +201,18 @@ def update_labels():
         
         used_mb = total_mb - remaining_mb
         profit_mb = (daily_mb * time_passed.total_seconds() / (24 * 3600)) - used_mb
-        profit_timedelta = timedelta(days=profit_mb / daily_mb)
+        profit_timedelta = timedelta(days=abs(profit_mb / daily_mb))
+        
+        # Kâr metni için renk ve ek bilgi
+        if profit_mb < 0:
+            profit_color = '#ff4444'  # Kırmızı
+            # Kârın 0 olacağı tarihi hesapla
+            days_to_zero = abs(profit_mb / daily_mb)
+            zero_date = now + timedelta(days=days_to_zero)
+            profit_text = f"{abs(profit_mb):.2f} MB\n{format_timedelta(profit_timedelta)}\n\n{zero_date.strftime('%d.%m.%Y %H:%M:%S')}"
+        else:
+            profit_color = '#44ff44'  # Yeşil
+            profit_text = f"{profit_mb:.2f} MB\n{format_timedelta(profit_timedelta)}"
         
         # Ortalama indirme hesaplama
         average_download = used_mb / days_passed if days_passed > 0 else 0
@@ -224,19 +234,22 @@ def update_labels():
         
         # Genel bilgiler sekmesindeki frame'leri güncelle
         info_labels = [
-            f"{format_timedelta(timedelta(days=total_days))}",
-            f"{daily_mb:.2f} MB",
+            profit_text,
             f"{average_download:.2f} MB",
-            f"{profit_mb:.2f} MB",
+            f"{daily_limit:.2f} MB",
             overage_text,
-            f"{daily_limit:.2f} MB"
+            f"{daily_mb:.2f} MB",
+            f"KALAN GÜN\n{format_timedelta(time_remaining)}\n\nTOPLAM GÜN\n{format_timedelta(timedelta(days=total_days))}\n\n%{(remaining_days/total_days)*100:.2f} kaldı"
         ]
         
         for i, frame in enumerate(general_tab.winfo_children()):
             if isinstance(frame, ttk.LabelFrame):
                 for label in frame.winfo_children():
                     if isinstance(label, ttk.Label):
-                        label.configure(text=info_labels[i])
+                        if i == 0:  # Kâr durumu frame'i
+                            label.configure(text=info_labels[i], foreground=profit_color)
+                        else:
+                            label.configure(text=info_labels[i], foreground='white')
         
         # Hedef bilgilerini güncelle
         try:
@@ -305,30 +318,26 @@ data_frame.pack(fill='x', padx=10, pady=5)
 mb_gb_frame = ttk.Frame(data_frame)
 mb_gb_frame.pack(fill='x', padx=5, pady=5)
 
-remaining_frame = ttk.LabelFrame(mb_gb_frame, text="Kalan MB")
-remaining_frame.pack(side='left', padx=5, fill='x', expand=True)
-entry_remaining_mb = ttk.Entry(remaining_frame)
-entry_remaining_mb.pack(padx=5, pady=5)
+ttk.Label(mb_gb_frame, text="Kalan MB").pack(side='left', padx=5)
+entry_remaining_mb = ttk.Entry(mb_gb_frame)
+entry_remaining_mb.pack(side='left', padx=5)
 
-total_frame = ttk.LabelFrame(mb_gb_frame, text="Toplam GB")
-total_frame.pack(side='left', padx=5, fill='x', expand=True)
-entry_total_gb = ttk.Entry(total_frame)
-entry_total_gb.pack(padx=5, pady=5)
+ttk.Label(mb_gb_frame, text="Toplam GB").pack(side='left', padx=5)
+entry_total_gb = ttk.Entry(mb_gb_frame)
+entry_total_gb.pack(side='left', padx=5)
 
 # Tarih seçimi frame
 date_frame = ttk.Frame(data_frame)
 date_frame.pack(fill='x', padx=5, pady=5)
 
 # Başlangıç ve bitiş tarihleri için frame'ler
-start_frame = ttk.LabelFrame(date_frame, text="Başlangıç")
-start_frame.pack(side='left', padx=5, fill='x', expand=True)
-start_datetime_entry = DateTimeEntry(start_frame)
-start_datetime_entry.pack(padx=5, pady=5)
+ttk.Label(date_frame, text="Başlangıç").pack(side='left', padx=5)
+start_datetime_entry = DateTimeEntry(date_frame)
+start_datetime_entry.pack(side='left', padx=5)
 
-end_frame = ttk.LabelFrame(date_frame, text="Bitiş")
-end_frame.pack(side='left', padx=5, fill='x', expand=True)
-end_datetime_entry = DateTimeEntry(end_frame)
-end_datetime_entry.pack(padx=5, pady=5)
+ttk.Label(date_frame, text="Bitiş").pack(side='left', padx=5)
+end_datetime_entry = DateTimeEntry(date_frame)
+end_datetime_entry.pack(side='left', padx=5)
 
 # Ana notebook (sekmeler) oluşturma
 notebook = ttk.Notebook(root)
@@ -340,8 +349,8 @@ notebook.add(general_tab, text='Genel Bilgiler')
 
 # Frame başlıkları
 frame_titles = [
-    "Toplam Süre", "Günlük Ortalama", "Ortalama İndirme",
-    "Kâr Durumu", "Aşım Durumu", "Günlük Limit"
+    "Kâr Durumu", "Ortalama İndirme", "Günlük Limit",
+    "Aşım Durumu", "Günlük Ortalama", "Toplam Süre"
 ]
 
 # 3x2 grid için frame'ler
@@ -416,7 +425,7 @@ load_data()
 
 # Label stilleri için yeni konfigürasyon
 style.configure('InfoLabel.TLabel', 
-               font=('Arial', 16, 'bold'), 
+               font=('Arial', 20, 'bold'), 
                background='#2b2b2b', 
                foreground='white',
                anchor='center',
