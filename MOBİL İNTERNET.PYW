@@ -14,7 +14,8 @@ def save_data():
         'remaining_mb': entry_remaining_mb.get(),
         'total_gb': entry_total_gb.get(),
         'target_profit': entry_target_profit.get(),
-        'target_limit': entry_target_limit.get()
+        'target_limit': entry_target_limit.get(),
+        'average_unit': average_unit_var.get()  # Seçilen birimi kaydet
     }
     try:
         with open('internet_data.json', 'w') as f:
@@ -54,6 +55,12 @@ def load_data():
                 if 'target_limit' in data:
                     entry_target_limit.delete(0, tk.END)
                     entry_target_limit.insert(0, data['target_limit'])
+                
+                # Ortalama birimi ayarla
+                if 'average_unit' in data:
+                    average_unit_var.set(data['average_unit'])
+                else:
+                    average_unit_var.set("Günlük")
                 
                 # Hesaplamaları güncelle
                 calculate()
@@ -220,8 +227,19 @@ def update_labels():
                 profit_text += f"\n({profit_mb/1024:.2f} GB)"
             profit_text += f"\n\n{format_timedelta(profit_timedelta)}"
         
-        # Ortalama indirme hesaplama
-        average_download = used_mb / days_passed if days_passed > 0 else 0
+        # Ortalama indirme hesaplama (saatlik/günlük)
+        selected_unit = average_unit_var.get()
+        if days_passed < 1:
+            hours_passed = time_passed.total_seconds() / 3600
+            average_download = used_mb / hours_passed if hours_passed > 0 else 0
+            average_download_text = f"{average_download:.2f} MB/saat\n(1 günden az)"
+        elif selected_unit == "Günlük":
+            average_download = used_mb / days_passed if days_passed > 0 else 0
+            average_download_text = f"{average_download:.2f} MB/gün"
+        else:  # Saatlik
+            hours_passed = time_passed.total_seconds() / 3600
+            average_download = used_mb / hours_passed if hours_passed > 0 else 0
+            average_download_text = f"{average_download:.2f} MB/saat"
         
         # Olası aşım tarihi (ortalama indirmeye göre)
         if average_download > 0:
@@ -241,7 +259,7 @@ def update_labels():
         # Genel bilgiler sekmesindeki frame'leri güncelle
         info_labels = [
             profit_text,
-            f"{average_download:.2f} MB",
+            average_download_text,
             f"{daily_limit:.2f} MB",
             overage_text,
             f"{daily_mb:.2f} MB",
@@ -359,6 +377,15 @@ start_datetime_entry.pack(side='left', padx=5)
 ttk.Label(date_frame, text="Bitiş").pack(side='left', padx=5)
 end_datetime_entry = DateTimeEntry(date_frame)
 end_datetime_entry.pack(side='left', padx=5)
+
+# Ortalama birimi dropdown menüsü
+average_unit_frame = ttk.Frame(data_frame)
+average_unit_frame.pack(fill='x', padx=5, pady=5)
+
+ttk.Label(average_unit_frame, text="Ortalama Birimi").pack(side='left', padx=5)
+average_unit_var = tk.StringVar(value="Günlük")
+average_unit_menu = ttk.Combobox(average_unit_frame, textvariable=average_unit_var, values=["Günlük", "Saatlik"], state="readonly")
+average_unit_menu.pack(side='left', padx=5)
 
 # Ana notebook (sekmeler) oluşturma
 notebook = ttk.Notebook(root)
