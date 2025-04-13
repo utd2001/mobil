@@ -3,62 +3,47 @@ from tkinter import ttk
 from datetime import datetime, timedelta
 from tkcalendar import DateEntry
 import tkinter.messagebox as messagebox
+import tkinter.simpledialog as simpledialog
 import json
 import os
 
+# Global variables to manage multiple packages
+packages = []
+current_package_index = None
+
 # Veri kaydetme ve yükleme fonksiyonları
 def save_data():
-    data = {
-        'start_date': start_datetime_entry.get_datetime().strftime("%d.%m.%Y %H:%M"),
-        'end_date': end_datetime_entry.get_datetime().strftime("%d.%m.%Y %H:%M"),
-        'remaining_mb': entry_remaining_mb.get(),
-        'total_gb': entry_total_gb.get(),
-        'target_profit': entry_target_profit.get(),
-        'target_limit': entry_target_limit.get(),
-        'unit': unit_var.get()
-    }
-    try:
-        with open('internet_data.json', 'w') as f:
-            json.dump(data, f)
-    except Exception as e:
-        messagebox.showerror("Hata", "Veriler kaydedilirken hata oluştu!")
+    if current_package_index is not None:
+        pkg = packages[current_package_index]
+        pkg['start_date'] = start_datetime_entry.get_datetime().strftime("%d.%m.%Y %H:%M")
+        pkg['end_date'] = end_datetime_entry.get_datetime().strftime("%d.%m.%Y %H:%M")
+        pkg['remaining_mb'] = entry_remaining_mb.get()
+        pkg['total_gb'] = entry_total_gb.get()
+        pkg['target_profit'] = entry_target_profit.get()
+        pkg['target_limit'] = entry_target_limit.get()
+        pkg['unit'] = unit_var.get()
+        try:
+            with open('internet_data.json', 'w') as f:
+                json.dump(packages, f)
+        except Exception as e:
+            messagebox.showerror("Hata", "Veriler kaydedilirken hata oluştu!")
 
 def load_data():
     try:
         if os.path.exists('internet_data.json'):
             with open('internet_data.json', 'r') as f:
-                data = json.load(f)
-                
-                start_date = datetime.strptime(data['start_date'], "%d.%m.%Y %H:%M")
-                end_date = datetime.strptime(data['end_date'], "%d.%m.%Y %H:%M")
-                
-                start_datetime_entry.date_picker.delete(0, tk.END)
-                start_datetime_entry.date_picker.insert(0, start_date.strftime("%d.%m.%Y"))
-                start_datetime_entry.time_entry.set_time(start_date.strftime("%H:%M"))
-                
-                end_datetime_entry.date_picker.delete(0, tk.END)
-                end_datetime_entry.date_picker.insert(0, end_date.strftime("%d.%m.%Y"))
-                end_datetime_entry.time_entry.set_time(end_date.strftime("%H:%M"))
-                
-                entry_remaining_mb.delete(0, tk.END)
-                entry_remaining_mb.insert(0, data['remaining_mb'])
-                entry_total_gb.delete(0, tk.END)
-                entry_total_gb.insert(0, data['total_gb'])
-                
-                if 'target_profit' in data:
-                    entry_target_profit.delete(0, tk.END)
-                    entry_target_profit.insert(0, data['target_profit'])
-                if 'target_limit' in data:
-                    entry_target_limit.delete(0, tk.END)
-                    entry_target_limit.insert(0, data['target_limit'])
-                
-                if 'unit' in data:
-                    unit_var.set(data['unit'])
-                
-                calculate()
+                global packages
+                packages = json.load(f)
+                update_package_combobox()
+                if packages:
+                    select_package(0)
+                else:
+                    clear_input_fields()
+                update_button_states()
     except Exception as e:
         pass
 
+# TimeEntry class (unchanged)
 class TimeEntry(tk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -95,6 +80,7 @@ class TimeEntry(tk.Frame):
         self.hour_var.set(hour)
         self.minute_var.set(minute)
 
+# DateTimeEntry class (unchanged)
 class DateTimeEntry(tk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -119,6 +105,7 @@ class DateTimeEntry(tk.Frame):
         self.date_picker.insert(0, dt.strftime("%d.%m.%Y"))
         self.time_entry.set_time(dt.strftime("%H:%M"))
 
+# Utility functions
 def format_timedelta(td):
     is_negative = td.total_seconds() < 0
     td = abs(td)
@@ -135,37 +122,23 @@ def format_timedelta(td):
     return f"{sign}{days}:{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 def calculate():
-    try:
-        start_date = start_datetime_entry.get_datetime()
-        end_date = end_datetime_entry.get_datetime()
-        remaining_mb = float(entry_remaining_mb.get())
-        total_gb = float(entry_total_gb.get())
-        
-        save_data()
-        
-        total_days = (end_date - start_date).total_seconds() / (24 * 3600)
-        total_mb = total_gb * 1024
-        daily_mb = total_mb / total_days
-        
-        time_passed = datetime.now() - start_date
-        days_passed = time_passed.total_seconds() / (24 * 3600)
-        
-        used_mb = total_mb - remaining_mb
-        profit_mb = (daily_mb * days_passed) - used_mb
-        profit_days = profit_mb / daily_mb
-        
-        time_remaining = end_date - datetime.now()
-        remaining_days = time_remaining.total_seconds() / (24 * 3600)
-        
-        daily_limit = remaining_mb / remaining_days if remaining_days > 0 else 0
-        
-        update_labels()
-        
-    except ValueError as e:
-        messagebox.showerror("Hata", "Lütfen tüm alanları doğru formatta doldurun.")
+    if current_package_index is not None:
+        try:
+            start_date = start_datetime_entry.get_datetime()
+            end_date = end_datetime_entry.get_datetime()
+            remaining_mb = float(entry_remaining_mb.get())
+            total_gb = float(entry_total_gb.get())
+            
+            save_data()
+            update_labels()
+            
+        except ValueError as e:
+            messagebox.showerror("Hata", "Lütfen tüm alanları doğru formatta doldurun.")
 
 def update_labels():
     try:
+        if current_package_index is None:
+            return
         start_date = start_datetime_entry.get_datetime()
         end_date = end_datetime_entry.get_datetime()
         remaining_mb = float(entry_remaining_mb.get())
@@ -174,18 +147,18 @@ def update_labels():
         
         total_days = (end_date - start_date).total_seconds() / (24 * 3600)
         total_mb = total_gb * 1024
-        daily_mb = total_mb / total_days
+        daily_mb = total_mb / total_days if total_days > 0 else 0
         
         time_passed = now - start_date
         days_passed = time_passed.total_seconds() / (24 * 3600)
         
         used_mb = total_mb - remaining_mb
         profit_mb = (daily_mb * days_passed) - used_mb
-        profit_timedelta = timedelta(days=abs(profit_mb / daily_mb))
+        profit_timedelta = timedelta(days=abs(profit_mb / daily_mb)) if daily_mb > 0 else timedelta(0)
         
         if profit_mb < 0:
             profit_color = '#ff4444'
-            days_to_zero = abs(profit_mb / daily_mb)
+            days_to_zero = abs(profit_mb / daily_mb) if daily_mb > 0 else 0
             zero_date = now + timedelta(days=days_to_zero)
             profit_text = f"{abs(profit_mb):.2f} MB"
             if abs(profit_mb) > 1024:
@@ -200,7 +173,6 @@ def update_labels():
         
         unit = unit_var.get()
         
-        # Geçen süre kontrolü
         if days_passed < 1 and unit == "Günlük":
             less_than_day = True
         else:
@@ -213,11 +185,11 @@ def update_labels():
         else:
             hours_passed = time_passed.total_seconds() / 3600
             average_download = used_mb / hours_passed if hours_passed > 0 else 0
-            daily_average = daily_mb / 24
+            daily_average = daily_mb / 24 if daily_mb > 0 else 0
             unit_text = "MB/saat"
         
         if less_than_day:
-            unit_text = "MB/saat (< 1 gün)"
+            unit_text = "MB/saat\n(< 1 gün)"
         
         if unit == "Günlük":
             if average_download > 0:
@@ -239,7 +211,6 @@ def update_labels():
         remaining_days = time_remaining.total_seconds() / (24 * 3600)
         remaining_hours = time_remaining.total_seconds() / 3600
         
-        # Günlük limit hesaplama
         if unit == "Günlük" and not less_than_day:
             daily_limit = remaining_mb / remaining_days if remaining_days > 0 else 0
             daily_limit_text = f"{daily_limit:.2f} MB/gün"
@@ -247,7 +218,7 @@ def update_labels():
             daily_limit = remaining_mb / remaining_hours if remaining_hours > 0 else 0
             daily_limit_text = f"{daily_limit:.2f} MB/saat"
             if less_than_day:
-                daily_limit_text += " (< 1 gün)"
+                daily_limit_text += "\n(< 1 gün)"
         
         info_labels = [
             profit_text,
@@ -255,7 +226,7 @@ def update_labels():
             daily_limit_text,
             overage_text,
             f"{daily_average:.2f} {unit_text}",
-            f"KALAN GÜN\n{format_timedelta(time_remaining)}\n\nTOPLAM GÜN\n{format_timedelta(timedelta(days=total_days))}\n\n%{(remaining_days/total_days)*100:.2f} kaldı"
+            f"KALAN GÜN\n{format_timedelta(time_remaining)}\n\nTOPLAM GÜN\n{format_timedelta(timedelta(days=total_days))}\n\n%{(remaining_days/total_days)*100:.2f} kaldı" if total_days > 0 else "N/A"
         ]
         
         for i, frame in enumerate(general_tab.winfo_children()):
@@ -271,7 +242,7 @@ def update_labels():
         
         try:
             target_profit_mb = float(entry_target_profit.get())
-            days_for_target_profit = (target_profit_mb - profit_mb) / daily_mb
+            days_for_target_profit = (target_profit_mb - profit_mb) / daily_mb if daily_mb > 0 else 0
             target_profit_date = now + timedelta(days=days_for_target_profit)
             label_days_for_profit.configure(
                 text=f"{format_timedelta(timedelta(days=days_for_target_profit))}\n"
@@ -282,7 +253,7 @@ def update_labels():
         
         try:
             target_limit_mb = float(entry_target_limit.get())
-            days_for_target_limit = remaining_days - (remaining_mb / target_limit_mb)
+            days_for_target_limit = remaining_days - (remaining_mb / target_limit_mb) if target_limit_mb > 0 else 0
             target_limit_date = now + timedelta(days=days_for_target_limit)
             label_days_for_limit.configure(
                 text=f"{format_timedelta(timedelta(days=days_for_target_limit))}\n"
@@ -305,6 +276,100 @@ def update_labels():
         
     except ValueError:
         pass
+
+# Package management functions
+def add_package():
+    name = simpledialog.askstring("Yeni Paket", "Paket adını girin:")
+    if name and name not in [pkg['name'] for pkg in packages]:
+        new_package = {
+            'name': name,
+            'start_date': datetime.now().strftime("%d.%m.%Y %H:%M"),
+            'end_date': (datetime.now() + timedelta(days=30)).strftime("%d.%m.%Y %H:%M"),
+            'remaining_mb': '0',
+            'total_gb': '0',
+            'target_profit': '0',
+            'target_limit': '0',
+            'unit': 'Günlük'
+        }
+        packages.append(new_package)
+        update_package_combobox()
+        package_combobox.set(name)
+        select_package(len(packages) - 1)
+        update_button_states()
+    else:
+        messagebox.showerror("Hata", "Bu isimde bir paket zaten var veya isim boş.")
+
+def remove_package():
+    global current_package_index
+    if current_package_index is not None:
+        del packages[current_package_index]
+        current_package_index = None
+        update_package_combobox()
+        if packages:
+            select_package(0)
+        else:
+            clear_input_fields()
+        update_button_states()
+
+def update_package_combobox():
+    package_names = [pkg['name'] for pkg in packages]
+    package_combobox['values'] = package_names
+    if packages:
+        package_combobox.set(packages[current_package_index]['name'] if current_package_index is not None else packages[0]['name'])
+    else:
+        package_combobox.set('')
+
+def select_package(index):
+    global current_package_index
+    current_package_index = index
+    pkg = packages[index]
+    start_datetime_entry.set_datetime(datetime.strptime(pkg['start_date'], "%d.%m.%Y %H:%M"))
+    end_datetime_entry.set_datetime(datetime.strptime(pkg['end_date'], "%d.%m.%Y %H:%M"))
+    entry_remaining_mb.delete(0, tk.END)
+    entry_remaining_mb.insert(0, pkg['remaining_mb'])
+    entry_total_gb.delete(0, tk.END)
+    entry_total_gb.insert(0, pkg['total_gb'])
+    entry_target_profit.delete(0, tk.END)
+    entry_target_profit.insert(0, pkg['target_profit'])
+    entry_target_limit.delete(0, tk.END)
+    entry_target_limit.insert(0, pkg['target_limit'])
+    unit_var.set(pkg['unit'])
+    calculate()
+
+def on_package_select(event):
+    selection = package_combobox.get()
+    if selection:
+        index = [pkg['name'] for pkg in packages].index(selection)
+        select_package(index)
+
+def clear_input_fields():
+    start_datetime_entry.set_datetime(datetime.now())
+    end_datetime_entry.set_datetime(datetime.now() + timedelta(days=30))
+    entry_remaining_mb.delete(0, tk.END)
+    entry_remaining_mb.insert(0, '0')
+    entry_total_gb.delete(0, tk.END)
+    entry_total_gb.insert(0, '0')
+    entry_target_profit.delete(0, tk.END)
+    entry_target_profit.insert(0, '0')
+    entry_target_limit.delete(0, tk.END)
+    entry_target_limit.insert(0, '0')
+    unit_var.set('Günlük')
+    for frame in general_tab.winfo_children():
+        if isinstance(frame, ttk.Frame):
+            for label in frame.winfo_children():
+                if isinstance(label, ttk.Label) and label.cget("style") == "InfoLabel.TLabel":
+                    label.configure(text="--")
+    label_days_for_profit.configure(text="--")
+    label_days_for_limit.configure(text="--")
+    label_remaining_gb.configure(text="")
+
+def update_button_states():
+    if packages:
+        button_calculate.state(['!disabled'])
+        remove_package_button.state(['!disabled'])
+    else:
+        button_calculate.state(['disabled'])
+        remove_package_button.state(['disabled'])
 
 # Arayüz tasarımı
 root = tk.Tk()
@@ -336,6 +401,22 @@ style.map('TNotebook.Tab',
 
 root.configure(bg='#2b2b2b')
 
+# Paket yönetimi frame'i
+package_management_frame = ttk.Frame(root)
+package_management_frame.pack(fill='x', padx=10, pady=5)
+
+ttk.Label(package_management_frame, text="Paketler:").pack(side='left', padx=5)
+package_combobox = ttk.Combobox(package_management_frame, state="readonly")
+package_combobox.pack(side='left', padx=5)
+package_combobox.bind("<<ComboboxSelected>>", on_package_select)
+
+add_package_button = ttk.Button(package_management_frame, text="Yeni Paket Ekle", command=add_package)
+add_package_button.pack(side='left', padx=5)
+
+remove_package_button = ttk.Button(package_management_frame, text="Paketi Sil", command=remove_package)
+remove_package_button.pack(side='left', padx=5)
+
+# Veri giriş frame'i
 data_frame = ttk.Frame(root)
 data_frame.pack(fill='x', padx=10, pady=5)
 
@@ -371,6 +452,7 @@ unit_var = tk.StringVar(value="Günlük")
 unit_combobox = ttk.Combobox(unit_frame, textvariable=unit_var, values=["Günlük", "Saatlik"], state="readonly")
 unit_combobox.pack(side='left', padx=5)
 
+# Notebook
 notebook = ttk.Notebook(root)
 notebook.pack(fill='both', expand=True, padx=10, pady=5)
 
@@ -432,6 +514,7 @@ def on_closing():
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 
+# Initial setup
 load_data()
 
 style.configure('InfoLabel.TLabel', 
