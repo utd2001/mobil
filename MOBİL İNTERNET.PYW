@@ -15,7 +15,7 @@ def save_data():
         'total_gb': entry_total_gb.get(),
         'target_profit': entry_target_profit.get(),
         'target_limit': entry_target_limit.get(),
-        'average_unit': average_unit_var.get()  # Seçilen birimi kaydet
+        'unit': unit_var.get()
     }
     try:
         with open('internet_data.json', 'w') as f:
@@ -29,11 +29,9 @@ def load_data():
             with open('internet_data.json', 'r') as f:
                 data = json.load(f)
                 
-                # Tarihleri ayarla
                 start_date = datetime.strptime(data['start_date'], "%d.%m.%Y %H:%M")
                 end_date = datetime.strptime(data['end_date'], "%d.%m.%Y %H:%M")
                 
-                # Tarih ve saat ayarla
                 start_datetime_entry.date_picker.delete(0, tk.END)
                 start_datetime_entry.date_picker.insert(0, start_date.strftime("%d.%m.%Y"))
                 start_datetime_entry.time_entry.set_time(start_date.strftime("%H:%M"))
@@ -42,13 +40,11 @@ def load_data():
                 end_datetime_entry.date_picker.insert(0, end_date.strftime("%d.%m.%Y"))
                 end_datetime_entry.time_entry.set_time(end_date.strftime("%H:%M"))
                 
-                # MB ve GB değerlerini ayarla
                 entry_remaining_mb.delete(0, tk.END)
                 entry_remaining_mb.insert(0, data['remaining_mb'])
                 entry_total_gb.delete(0, tk.END)
                 entry_total_gb.insert(0, data['total_gb'])
                 
-                # Hedef değerleri ayarla
                 if 'target_profit' in data:
                     entry_target_profit.delete(0, tk.END)
                     entry_target_profit.insert(0, data['target_profit'])
@@ -56,13 +52,9 @@ def load_data():
                     entry_target_limit.delete(0, tk.END)
                     entry_target_limit.insert(0, data['target_limit'])
                 
-                # Ortalama birimi ayarla
-                if 'average_unit' in data:
-                    average_unit_var.set(data['average_unit'])
-                else:
-                    average_unit_var.set("Günlük")
+                if 'unit' in data:
+                    unit_var.set(data['unit'])
                 
-                # Hesaplamaları güncelle
                 calculate()
     except Exception as e:
         pass
@@ -72,11 +64,9 @@ class TimeEntry(tk.Frame):
         super().__init__(parent, **kwargs)
         self.configure(bg='#2b2b2b')
         
-        # Saat girişi
         self.hour_var = tk.StringVar(value="00")
         self.minute_var = tk.StringVar(value="00")
         
-        # Saat spinbox
         self.hour_spinbox = ttk.Spinbox(
             self, from_=0, to=23, width=2,
             format="%02.0f",
@@ -88,7 +78,6 @@ class TimeEntry(tk.Frame):
         
         tk.Label(self, text=":", bg='#2b2b2b', fg='white').pack(side=tk.LEFT)
         
-        # Dakika spinbox
         self.minute_spinbox = ttk.Spinbox(
             self, from_=0, to=59, width=2,
             format="%02.0f",
@@ -111,14 +100,12 @@ class DateTimeEntry(tk.Frame):
         super().__init__(parent, **kwargs)
         self.configure(bg='#2b2b2b')
         
-        # Tarih seçici
         self.date_picker = ttk.Entry(
             self, width=12,
             style='Dark.TEntry'
         )
         self.date_picker.pack(side=tk.LEFT, padx=5)
         
-        # Zaman girişi
         self.time_entry = TimeEntry(self)
         self.time_entry.pack(side=tk.LEFT, padx=5)
     
@@ -133,7 +120,6 @@ class DateTimeEntry(tk.Frame):
         self.time_entry.set_time(dt.strftime("%H:%M"))
 
 def format_timedelta(td):
-    # Negatif süreleri pozitife çevir ama işareti sakla
     is_negative = td.total_seconds() < 0
     td = abs(td)
     
@@ -145,7 +131,6 @@ def format_timedelta(td):
     minutes = remaining // 60
     seconds = remaining % 60
     
-    # İşareti ekle
     sign = "-" if is_negative else ""
     return f"{sign}{days}:{hours:02d}:{minutes:02d}:{seconds:02d}"
 
@@ -156,34 +141,22 @@ def calculate():
         remaining_mb = float(entry_remaining_mb.get())
         total_gb = float(entry_total_gb.get())
         
-        # Verileri kaydet
         save_data()
         
-        # Toplam gün hesaplama
         total_days = (end_date - start_date).total_seconds() / (24 * 3600)
-        
-        # Toplam MB ve günlük ortalama MB
         total_mb = total_gb * 1024
         daily_mb = total_mb / total_days
         
-        # Geçen süre (gün + saat + dakika + saniye olarak)
         time_passed = datetime.now() - start_date
         days_passed = time_passed.total_seconds() / (24 * 3600)
         
-        # Kullanılan MB
         used_mb = total_mb - remaining_mb
-        
-        # Kâr hesaplama (MB)
         profit_mb = (daily_mb * days_passed) - used_mb
-        
-        # Kâr (Gün olarak)
         profit_days = profit_mb / daily_mb
         
-        # Kalan süre
         time_remaining = end_date - datetime.now()
         remaining_days = time_remaining.total_seconds() / (24 * 3600)
         
-        # Günlük sınır (Kalan MB/Kalan gün)
         daily_limit = remaining_mb / remaining_days if remaining_days > 0 else 0
         
         update_labels()
@@ -207,62 +180,81 @@ def update_labels():
         days_passed = time_passed.total_seconds() / (24 * 3600)
         
         used_mb = total_mb - remaining_mb
-        profit_mb = (daily_mb * time_passed.total_seconds() / (24 * 3600)) - used_mb
+        profit_mb = (daily_mb * days_passed) - used_mb
         profit_timedelta = timedelta(days=abs(profit_mb / daily_mb))
         
-        # Kâr metni için renk ve ek bilgi
         if profit_mb < 0:
-            profit_color = '#ff4444'  # Kırmızı
-            # Kârın 0 olacağı tarihi hesapla
+            profit_color = '#ff4444'
             days_to_zero = abs(profit_mb / daily_mb)
             zero_date = now + timedelta(days=days_to_zero)
             profit_text = f"{abs(profit_mb):.2f} MB"
-            if abs(profit_mb) > 1024:  # 1 GB'dan büyükse
+            if abs(profit_mb) > 1024:
                 profit_text += f"\n({abs(profit_mb/1024):.2f} GB)"
             profit_text += f"\n\n{format_timedelta(profit_timedelta)}\n{zero_date.strftime('%d.%m.%Y %H:%M:%S')}"
         else:
-            profit_color = '#44ff44'  # Yeşil
+            profit_color = '#44ff44'
             profit_text = f"{profit_mb:.2f} MB"
-            if profit_mb > 1024:  # 1 GB'dan büyükse
+            if profit_mb > 1024:
                 profit_text += f"\n({profit_mb/1024:.2f} GB)"
             profit_text += f"\n\n{format_timedelta(profit_timedelta)}"
         
-        # Ortalama indirme hesaplama (saatlik/günlük)
-        selected_unit = average_unit_var.get()
-        if days_passed < 1:
-            hours_passed = time_passed.total_seconds() / 3600
-            average_download = used_mb / hours_passed if hours_passed > 0 else 0
-            average_download_text = f"{average_download:.2f} MB/saat\n(1 günden az)"
-        elif selected_unit == "Günlük":
-            average_download = used_mb / days_passed if days_passed > 0 else 0
-            average_download_text = f"{average_download:.2f} MB/gün"
-        else:  # Saatlik
-            hours_passed = time_passed.total_seconds() / 3600
-            average_download = used_mb / hours_passed if hours_passed > 0 else 0
-            average_download_text = f"{average_download:.2f} MB/saat"
+        unit = unit_var.get()
         
-        # Olası aşım tarihi (ortalama indirmeye göre)
-        if average_download > 0:
-            days_until_overage = remaining_mb / average_download
-            overage_date = now + timedelta(days=days_until_overage)
-            if overage_date > end_date:
-                overage_text = "Aşım Yok"
-            else:
-                overage_text = f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
+        # Geçen süre kontrolü
+        if days_passed < 1 and unit == "Günlük":
+            less_than_day = True
         else:
-            overage_text = "--"
+            less_than_day = False
+        
+        if unit == "Günlük":
+            average_download = used_mb / days_passed if days_passed > 0 else 0
+            daily_average = daily_mb
+            unit_text = "MB/gün"
+        else:
+            hours_passed = time_passed.total_seconds() / 3600
+            average_download = used_mb / hours_passed if hours_passed > 0 else 0
+            daily_average = daily_mb / 24
+            unit_text = "MB/saat"
+        
+        if less_than_day:
+            unit_text = "MB/saat (< 1 gün)"
+        
+        if unit == "Günlük":
+            if average_download > 0:
+                days_until_overage = remaining_mb / average_download
+                overage_date = now + timedelta(days=days_until_overage)
+                overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
+            else:
+                overage_text = "--"
+        else:
+            hours_passed = time_passed.total_seconds() / 3600
+            if average_download > 0:
+                hours_until_overage = remaining_mb / average_download
+                overage_date = now + timedelta(hours=hours_until_overage)
+                overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
+            else:
+                overage_text = "--"
         
         time_remaining = end_date - now
         remaining_days = time_remaining.total_seconds() / (24 * 3600)
-        daily_limit = remaining_mb / remaining_days if remaining_days > 0 else 0
+        remaining_hours = time_remaining.total_seconds() / 3600
         
-        # Genel bilgiler sekmesindeki frame'leri güncelle
+        # Günlük limit hesaplama
+        if unit == "Günlük" and not less_than_day:
+            daily_limit = remaining_mb / remaining_days if remaining_days > 0 else 0
+            daily_limit_text = f"{daily_limit:.2f} MB/gün"
+        else:
+            daily_limit = remaining_mb / remaining_hours if remaining_hours > 0 else 0
+            daily_limit_text = f"{daily_limit:.2f} MB/saat"
+            if less_than_day:
+                daily_limit_text += " (< 1 gün)"
+        
         info_labels = [
             profit_text,
-            average_download_text,
-            f"{daily_limit:.2f} MB",
+            f"{average_download:.2f} {unit_text}",
+            daily_limit_text,
             overage_text,
-            f"{daily_mb:.2f} MB",
+            f"{daily_average:.2f} {unit_text}",
             f"KALAN GÜN\n{format_timedelta(time_remaining)}\n\nTOPLAM GÜN\n{format_timedelta(timedelta(days=total_days))}\n\n%{(remaining_days/total_days)*100:.2f} kaldı"
         ]
         
@@ -270,14 +262,13 @@ def update_labels():
             if isinstance(frame, ttk.Frame):
                 for label in frame.winfo_children():
                     if isinstance(label, ttk.Label):
-                        if i == 0:  # Kâr durumu frame'i
+                        if i == 0:
                             if label.cget("style") == "InfoLabel.TLabel":
                                 label.configure(text=info_labels[i], foreground=profit_color)
                         else:
                             if label.cget("style") == "InfoLabel.TLabel":
                                 label.configure(text=info_labels[i], foreground='white')
         
-        # Hedef bilgilerini güncelle
         try:
             target_profit_mb = float(entry_target_profit.get())
             days_for_target_profit = (target_profit_mb - profit_mb) / daily_mb
@@ -300,10 +291,9 @@ def update_labels():
         except:
             label_days_for_limit.configure(text="--")
         
-        # Kalan MB'ı GB olarak göster
         try:
             remaining_mb_val = float(entry_remaining_mb.get())
-            if remaining_mb_val > 1024:  # 1 GB'dan büyükse
+            if remaining_mb_val > 1024:
                 gb_val = remaining_mb_val / 1024
                 label_remaining_gb.configure(text=f"({gb_val:.2f} GB)")
             else:
@@ -311,7 +301,7 @@ def update_labels():
         except:
             label_remaining_gb.configure(text="")
         
-        root.after(100, update_labels)  # Her 100ms'de güncelle
+        root.after(100, update_labels)
         
     except ValueError:
         pass
@@ -321,7 +311,6 @@ root = tk.Tk()
 root.title("Mobil İnternet Hesaplama")
 root.geometry("800x750")
 
-# Koyu tema ayarları
 style = ttk.Style()
 style.theme_use('clam')
 style.configure('.', background='#2b2b2b', foreground='white')
@@ -347,11 +336,9 @@ style.map('TNotebook.Tab',
 
 root.configure(bg='#2b2b2b')
 
-# Veri giriş frame'i
 data_frame = ttk.Frame(root)
 data_frame.pack(fill='x', padx=10, pady=5)
 
-# MB ve GB giriş frame'i
 mb_gb_frame = ttk.Frame(data_frame)
 mb_gb_frame.pack(fill='x', padx=5, pady=5)
 
@@ -365,11 +352,9 @@ ttk.Label(mb_gb_frame, text="Toplam GB").pack(side='left', padx=5)
 entry_total_gb = ttk.Entry(mb_gb_frame)
 entry_total_gb.pack(side='left', padx=5)
 
-# Tarih seçimi frame
 date_frame = ttk.Frame(data_frame)
 date_frame.pack(fill='x', padx=5, pady=5)
 
-# Başlangıç ve bitiş tarihleri için frame'ler
 ttk.Label(date_frame, text="Başlangıç").pack(side='left', padx=5)
 start_datetime_entry = DateTimeEntry(date_frame)
 start_datetime_entry.pack(side='left', padx=5)
@@ -378,55 +363,44 @@ ttk.Label(date_frame, text="Bitiş").pack(side='left', padx=5)
 end_datetime_entry = DateTimeEntry(date_frame)
 end_datetime_entry.pack(side='left', padx=5)
 
-# Ortalama birimi dropdown menüsü
-average_unit_frame = ttk.Frame(data_frame)
-average_unit_frame.pack(fill='x', padx=5, pady=5)
+unit_frame = ttk.Frame(data_frame)
+unit_frame.pack(fill='x', padx=5, pady=5)
 
-ttk.Label(average_unit_frame, text="Ortalama Birimi").pack(side='left', padx=5)
-average_unit_var = tk.StringVar(value="Günlük")
-average_unit_menu = ttk.Combobox(average_unit_frame, textvariable=average_unit_var, values=["Günlük", "Saatlik"], state="readonly")
-average_unit_menu.pack(side='left', padx=5)
+ttk.Label(unit_frame, text="Birim").pack(side='left', padx=5)
+unit_var = tk.StringVar(value="Günlük")
+unit_combobox = ttk.Combobox(unit_frame, textvariable=unit_var, values=["Günlük", "Saatlik"], state="readonly")
+unit_combobox.pack(side='left', padx=5)
 
-# Ana notebook (sekmeler) oluşturma
 notebook = ttk.Notebook(root)
 notebook.pack(fill='both', expand=True, padx=10, pady=5)
 
-# Genel bilgiler sekmesi
 general_tab = ttk.Frame(notebook)
 notebook.add(general_tab, text='Genel Bilgiler')
 
-# Frame başlıkları
 frame_titles = [
-    "Kâr Durumu", "Ortalama İndirme", "Günlük Limit",
-    "Aşım Durumu", "Günlük Ortalama", "Toplam Süre"
+    "Kâr Durumu", "Geçmiş Ortalama İndirme", "Limit",
+    "Tahmini Aşım Tarihi", "Paket Ortalaması", "Toplam Süre"
 ]
 
-# 3x2 grid için frame'ler
 for i in range(2):
     for j in range(3):
         idx = i * 3 + j
         frame = ttk.Frame(general_tab)
         frame.grid(row=i, column=j, padx=5, pady=5, sticky='nsew')
-        # Frame'in minimum boyutunu ayarla
         frame.grid_propagate(False)
         frame.configure(width=200, height=150)
-        # Başlık label'ı
         ttk.Label(frame, text=frame_titles[idx], style='TLabel').place(relx=0.5, rely=0.15, anchor='center')
-        # Bilgi label'ı
         label = ttk.Label(frame, text="--", style='InfoLabel.TLabel')
         label.place(relx=0.5, rely=0.5, anchor='center')
 
-# Grid yapılandırması
 for i in range(2):
     general_tab.grid_rowconfigure(i, weight=1)
 for j in range(3):
     general_tab.grid_columnconfigure(j, weight=1)
 
-# Hedefler sekmesi
 targets_tab = ttk.Frame(notebook)
 notebook.add(targets_tab, text='Hedefler')
 
-# Hedef ve sınır giriş frame'leri
 input_frame = ttk.Frame(targets_tab)
 input_frame.pack(fill='x', padx=5, pady=5)
 
@@ -446,11 +420,9 @@ entry_target_limit.pack(padx=5, pady=5)
 label_days_for_limit = ttk.Label(limit_frame, text="--", style='InfoLabel.TLabel')
 label_days_for_limit.pack(padx=5, pady=5)
 
-# Hesaplama butonu
 button_calculate = ttk.Button(root, text="Hesapla", command=calculate)
 button_calculate.pack(pady=10)
 
-# Pencere kapanırken verileri kaydet
 def on_closing():
     try:
         save_data()
@@ -460,10 +432,8 @@ def on_closing():
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 
-# Program başladığında verileri yükle
 load_data()
 
-# Label stilleri için yeni konfigürasyon
 style.configure('InfoLabel.TLabel', 
                font=('Arial', 20, 'bold'), 
                background='#2b2b2b', 
