@@ -21,7 +21,7 @@ def save_data():
         pkg['target_profit'] = entry_target_profit.get()
         pkg['target_limit'] = entry_target_limit.get()
         pkg['unit'] = unit_var.get()
-        pkg['active_hours'] = entry_active_hours.get()  # Aktif saatleri kaydet
+        pkg['active_hours'] = entry_active_hours.get()
         try:
             with open('internet_data.json', 'w') as f:
                 json.dump(packages, f)
@@ -289,7 +289,7 @@ def add_package():
             'target_profit': '0',
             'target_limit': '0',
             'unit': 'Günlük',
-            'active_hours': '14'  # Varsayılan aktif saat
+            'active_hours': '14'
         }
         packages.append(new_package)
         update_package_combobox()
@@ -334,7 +334,7 @@ def select_package(index):
     entry_target_limit.delete(0, tk.END)
     entry_target_limit.insert(0, pkg['target_limit'])
     entry_active_hours.delete(0, tk.END)
-    entry_active_hours.insert(0, pkg.get('active_hours', '14'))  # Varsayılan 14
+    entry_active_hours.insert(0, pkg.get('active_hours', '14'))
     unit_var.set(pkg['unit'])
     calculate()
 
@@ -386,6 +386,9 @@ style.configure('.', background='#2b2b2b', foreground='white')
 style.configure('TFrame', background='#2b2b2b')
 style.configure('TLabel', background='#2b2b2b', foreground='white')
 style.configure('TButton', background='#404040', foreground='white')
+style.map('TButton',
+          background=[('active', '#606060')],
+          foreground=[('active', 'white')])
 style.configure('TNotebook', background='#2b2b2b', foreground='white')
 style.configure('TNotebook.Tab', background='#404040', foreground='white', padding=[10, 2])
 style.configure('TLabelframe', background='#2b2b2b', foreground='white')
@@ -416,68 +419,79 @@ style.map('TNotebook.Tab',
 
 root.configure(bg='#2b2b2b')
 
-# Paket yönetimi frame'i
-package_management_frame = ttk.Frame(root)
-package_management_frame.pack(fill='x', padx=10, pady=5)
+# Üst frame'ler
+left_frame = ttk.Frame(root)
+left_frame.grid(row=0, column=0, sticky='nsew', padx=10, pady=5)
 
-ttk.Label(package_management_frame, text="Paketler:").pack(side='left', padx=5)
-package_combobox = ttk.Combobox(package_management_frame, state="readonly")
-package_combobox.pack(side='left', padx=5)
+center_frame = ttk.Frame(root)
+center_frame.grid(row=0, column=1, sticky='nsew', padx=10, pady=5)
+
+right_frame = ttk.Frame(root)
+right_frame.grid(row=0, column=2, sticky='nsew', padx=10, pady=5)
+
+# Grid yapılandırması
+root.grid_rowconfigure(0, weight=0)
+root.grid_rowconfigure(1, weight=1)
+root.grid_rowconfigure(2, weight=0)
+root.grid_columnconfigure(0, weight=1)
+root.grid_columnconfigure(1, weight=2)
+root.grid_columnconfigure(2, weight=1)
+
+# Sol taraf - Paket yönetimi
+ttk.Label(left_frame, text="Paketler:").pack(side='top', anchor='w', padx=5, pady=2)
+package_combobox = ttk.Combobox(left_frame, state="readonly")
+package_combobox.pack(side='top', fill='x', padx=5, pady=2)
 package_combobox.bind("<<ComboboxSelected>>", on_package_select)
+add_package_button = ttk.Button(left_frame, text="Yeni Paket Ekle", command=add_package)
+add_package_button.pack(side='top', fill='x', padx=5, pady=2)
+remove_package_button = ttk.Button(left_frame, text="Paketi Sil", command=remove_package)
+remove_package_button.pack(side='top', fill='x', padx=5, pady=2)
 
-add_package_button = ttk.Button(package_management_frame, text="Yeni Paket Ekle", command=add_package)
-add_package_button.pack(side='left', padx=5)
-
-remove_package_button = ttk.Button(package_management_frame, text="Paketi Sil", command=remove_package)
-remove_package_button.pack(side='left', padx=5)
-
-# Veri giriş frame'i
-data_frame = ttk.Frame(root)
-data_frame.pack(fill='x', padx=10, pady=5)
-
-mb_gb_frame = ttk.Frame(data_frame)
-mb_gb_frame.pack(fill='x', padx=5, pady=5)
-
-ttk.Label(mb_gb_frame, text="Kalan MB").pack(side='left', padx=5)
-entry_remaining_mb = ttk.Entry(mb_gb_frame)
+# Orta taraf - Veri girişi
+remaining_mb_frame = ttk.Frame(center_frame)
+remaining_mb_frame.pack(fill='x', padx=5, pady=2)
+ttk.Label(remaining_mb_frame, text="Kalan MB").pack(side='left', padx=5)
+entry_remaining_mb = ttk.Entry(remaining_mb_frame)
 entry_remaining_mb.pack(side='left', padx=5)
-label_remaining_gb = ttk.Label(mb_gb_frame, text="")
+label_remaining_gb = ttk.Label(remaining_mb_frame, text="")
 label_remaining_gb.pack(side='left')
 
-ttk.Label(mb_gb_frame, text="Toplam GB").pack(side='left', padx=5)
-entry_total_gb = ttk.Entry(mb_gb_frame)
+total_gb_frame = ttk.Frame(center_frame)
+total_gb_frame.pack(fill='x', padx=5, pady=2)
+ttk.Label(total_gb_frame, text="Toplam GB").pack(side='left', padx=5)
+entry_total_gb = ttk.Entry(total_gb_frame)
 entry_total_gb.pack(side='left', padx=5)
 
-date_frame = ttk.Frame(data_frame)
-date_frame.pack(fill='x', padx=5, pady=5)
-
-ttk.Label(date_frame, text="Başlangıç").pack(side='left', padx=5)
-start_datetime_entry = DateTimeEntry(date_frame)
+start_frame = ttk.Frame(center_frame)
+start_frame.pack(fill='x', padx=5, pady=2)
+ttk.Label(start_frame, text="Başlangıç").pack(side='left', padx=5)
+start_datetime_entry = DateTimeEntry(start_frame)
 start_datetime_entry.pack(side='left', padx=5)
 
-ttk.Label(date_frame, text="Bitiş").pack(side='left', padx=5)
-end_datetime_entry = DateTimeEntry(date_frame)
+end_frame = ttk.Frame(center_frame)
+end_frame.pack(fill='x', padx=5, pady=2)
+ttk.Label(end_frame, text="Bitiş").pack(side='left', padx=5)
+end_datetime_entry = DateTimeEntry(end_frame)
 end_datetime_entry.pack(side='left', padx=5)
 
-unit_frame = ttk.Frame(data_frame)
-unit_frame.pack(fill='x', padx=5, pady=5)
-
+# Sağ taraf - Ek ayarlar
+unit_frame = ttk.Frame(right_frame)
+unit_frame.pack(fill='x', padx=5, pady=2)
 ttk.Label(unit_frame, text="Birim").pack(side='left', padx=5)
 unit_var = tk.StringVar(value="Günlük")
 unit_combobox = ttk.Combobox(unit_frame, textvariable=unit_var, values=["Günlük", "Saatlik"], state="readonly")
 unit_combobox.pack(side='left', padx=5)
 
-active_hours_frame = ttk.Frame(data_frame)
-active_hours_frame.pack(fill='x', padx=5, pady=5)
-
-ttk.Label(active_hours_frame, text="Aktif Saatler (günlük)").pack(side='left', padx=5)
+active_hours_frame = ttk.Frame(right_frame)
+active_hours_frame.pack(fill='x', padx=5, pady=2)
+ttk.Label(active_hours_frame, text="Aktif Saatler").pack(side='left', padx=5)
 entry_active_hours = ttk.Entry(active_hours_frame)
 entry_active_hours.pack(side='left', padx=5)
-entry_active_hours.insert(0, '14')  # Varsayılan değer
+entry_active_hours.insert(0, '14')
 
 # Notebook
 notebook = ttk.Notebook(root)
-notebook.pack(fill='both', expand=True, padx=10, pady=5)
+notebook.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=10, pady=5)
 
 general_tab = ttk.Frame(notebook)
 notebook.add(general_tab, text='Genel Bilgiler')
@@ -523,10 +537,15 @@ ttk.Label(limit_frame, text="Sınır (MB/Gün)").pack(padx=5, pady=5)
 entry_target_limit = ttk.Entry(limit_frame)
 entry_target_limit.pack(padx=5, pady=5)
 label_days_for_limit = ttk.Label(limit_frame, text="--", style='InfoLabel.TLabel')
+limit_frame.pack(side='left', padx=5, fill='x', expand=True)
+ttk.Label(limit_frame, text="Sınır (MB/Gün)").pack(padx=5, pady=5)
+entry_target_limit = ttk.Entry(limit_frame)
+entry_target_limit.pack(padx=5, pady=5)
+label_days_for_limit = ttk.Label(limit_frame, text="--", style='InfoLabel.TLabel')
 label_days_for_limit.pack(padx=5, pady=5)
 
 button_calculate = ttk.Button(root, text="Kaydet", command=calculate)
-button_calculate.pack(pady=10)
+button_calculate.grid(row=2, column=0, columnspan=3, pady=10)
 
 def on_closing():
     try:
