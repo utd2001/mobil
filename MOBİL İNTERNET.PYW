@@ -7,7 +7,7 @@ import tkinter.simpledialog as simpledialog
 import json
 import os
 
-# Global variables to manage multiple packages
+# Global değişkenler
 packages = []
 current_package_index = None
 
@@ -43,7 +43,7 @@ def load_data():
     except Exception as e:
         pass
 
-# TimeEntry class (unchanged)
+# TimeEntry sınıfı
 class TimeEntry(tk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -80,7 +80,7 @@ class TimeEntry(tk.Frame):
         self.hour_var.set(hour)
         self.minute_var.set(minute)
 
-# DateTimeEntry class (unchanged)
+# DateTimeEntry sınıfı
 class DateTimeEntry(tk.Frame):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -105,7 +105,7 @@ class DateTimeEntry(tk.Frame):
         self.date_picker.insert(0, dt.strftime("%d.%m.%Y"))
         self.time_entry.set_time(dt.strftime("%H:%M"))
 
-# Utility functions
+# Yardımcı fonksiyonlar
 def format_timedelta(td):
     is_negative = td.total_seconds() < 0
     td = abs(td)
@@ -277,7 +277,7 @@ def update_labels():
     except ValueError:
         pass
 
-# Package management functions
+# Paket yönetimi fonksiyonları
 def add_package():
     name = simpledialog.askstring("Yeni Paket", "Paket adını girin:")
     if name and name not in [pkg['name'] for pkg in packages]:
@@ -395,6 +395,17 @@ style.configure('Dark.TSpinbox',
                foreground='white',
                selectbackground='#606060',
                selectforeground='white')
+style.configure('TCombobox',
+                fieldbackground='#404040',
+                background='#404040',
+                foreground='white',
+                arrowcolor='white',
+                selectbackground='#606060',
+                selectforeground='white')
+style.map('TCombobox',
+          fieldbackground=[('readonly', '#404040')],
+          background=[('readonly', '#404040')],
+          foreground=[('readonly', 'white')])
 style.map('TNotebook.Tab',
           background=[('selected', '#606060')],
           foreground=[('selected', 'white')])
@@ -502,7 +513,7 @@ entry_target_limit.pack(padx=5, pady=5)
 label_days_for_limit = ttk.Label(limit_frame, text="--", style='InfoLabel.TLabel')
 label_days_for_limit.pack(padx=5, pady=5)
 
-button_calculate = ttk.Button(root, text="Hesapla", command=calculate)
+button_calculate = ttk.Button(root, text="Kaydet", command=calculate)
 button_calculate.pack(pady=10)
 
 def on_closing():
@@ -514,7 +525,7 @@ def on_closing():
 
 root.protocol("WM_DELETE_WINDOW", on_closing)
 
-# Initial setup
+# Başlangıç ayarları
 load_data()
 
 style.configure('InfoLabel.TLabel', 
