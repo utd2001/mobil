@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime, timedelta
-from tkcalendar import DateEntry
 import tkinter.messagebox as messagebox
 import tkinter.simpledialog as simpledialog
 import json
@@ -22,6 +21,7 @@ def save_data():
         pkg['target_profit'] = entry_target_profit.get()
         pkg['target_limit'] = entry_target_limit.get()
         pkg['unit'] = unit_var.get()
+        pkg['active_hours'] = entry_active_hours.get()
         try:
             with open('internet_data.json', 'w') as f:
                 json.dump(packages, f)
@@ -128,12 +128,15 @@ def calculate():
             end_date = end_datetime_entry.get_datetime()
             remaining_mb = float(entry_remaining_mb.get())
             total_gb = float(entry_total_gb.get())
+            active_hours = float(entry_active_hours.get())
+            if active_hours <= 0 or active_hours > 24:
+                raise ValueError("Aktif saatler 0'dan büyük ve 24'ten küçük veya eşit olmalıdır.")
             
             save_data()
             update_labels()
             
         except ValueError as e:
-            messagebox.showerror("Hata", "Lütfen tüm alanları doğru formatta doldurun.")
+            messagebox.showerror("Hata", f"Lütfen tüm alanları doğru formatta doldurun: {str(e)}")
 
 def update_labels():
     try:
@@ -143,6 +146,7 @@ def update_labels():
         end_date = end_datetime_entry.get_datetime()
         remaining_mb = float(entry_remaining_mb.get())
         total_gb = float(entry_total_gb.get())
+        active_hours_per_day = float(entry_active_hours.get())
         now = datetime.now()
         
         total_days = (end_date - start_date).total_seconds() / (24 * 3600)
@@ -173,52 +177,64 @@ def update_labels():
         
         unit = unit_var.get()
         
-        if days_passed < 1 and unit == "Günlük":
-            less_than_day = True
-        else:
-            less_than_day = False
-        
         if unit == "Günlük":
-            average_download = used_mb / days_passed if days_passed > 0 else 0
+            if days_passed < 1:
+                passed_hours = time_passed.total_seconds() / 3600
+                if passed_hours > 0:
+                    hourly_usage = used_mb / passed_hours
+                    estimated_daily_usage = hourly_usage * 24  # Günlük tam 24 saat
+                    if estimated_daily_usage > 0:
+                        days_until_overage = remaining_mb / estimated_daily_usage
+                        overage_date = now + timedelta(days=days_until_overage)
+                        overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
+                    else:
+                        overage_text = "--"
+                    average_download = estimated_daily_usage
+                else:
+                    overage_text = "--"
+                    average_download = 0
+            else:
+                average_download = used_mb / days_passed
+                if average_download > 0:
+                    days_until_overage = remaining_mb / average_download
+                    overage_date = now + timedelta(days=days_until_overage)
+                    overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
+                else:
+                    overage_text = "--"
+            
             daily_average = daily_mb
             unit_text = "MB/gün"
-        else:
-            hours_passed = time_passed.total_seconds() / 3600
-            average_download = used_mb / hours_passed if hours_passed > 0 else 0
-            daily_average = daily_mb / 24 if daily_mb > 0 else 0
-            unit_text = "MB/saat"
-        
-        if less_than_day:
-            unit_text = "MB/saat\n(< 1 gün)"
-        
-        if unit == "Günlük":
-            if average_download > 0:
-                days_until_overage = remaining_mb / average_download
-                overage_date = now + timedelta(days=days_until_overage)
-                overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
-            else:
-                overage_text = "--"
-        else:
-            hours_passed = time_passed.total_seconds() / 3600
-            if average_download > 0:
-                hours_until_overage = remaining_mb / average_download
-                overage_date = now + timedelta(hours=hours_until_overage)
-                overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
-            else:
-                overage_text = "--"
-        
-        time_remaining = end_date - now
-        remaining_days = time_remaining.total_seconds() / (24 * 3600)
-        remaining_hours = time_remaining.total_seconds() / 3600
-        
-        if unit == "Günlük" and not less_than_day:
+            time_remaining = end_date - now
+            remaining_days = time_remaining.total_seconds() / (24 * 3600)
             daily_limit = remaining_mb / remaining_days if remaining_days > 0 else 0
             daily_limit_text = f"{daily_limit:.2f} MB/gün"
-        else:
-            daily_limit = remaining_mb / remaining_hours if remaining_hours > 0 else 0
+        else:  # Saatlik
+            # Toplam aktif saatler, her günün 24 saatinin active_hours_per_day/24 oranıyla hesaplanır
+            active_ratio = active_hours_per_day / 24  # Ör: 14/24 = 0.5833
+            total_active_hours = total_days * active_hours_per_day
+            passed_active_hours = days_passed * active_hours_per_day
+            time_remaining = end_date - now
+            remaining_days = time_remaining.total_seconds() / (24 * 3600)
+            remaining_active_hours = remaining_days * active_hours_per_day
+            
+            if passed_active_hours > 0:
+                average_download = used_mb / passed_active_hours  # MB/saat (aktif saat bazında)
+            else:
+                average_download = 0
+            
+            if average_download > 0:
+                hours_until_overage = remaining_mb / average_download  # Aktif saat cinsinden
+                # Aktif saatleri takvim zamanına çevirme: hours_until_overage / active_ratio
+                calendar_hours = hours_until_overage / active_ratio
+                overage_date = now + timedelta(hours=calendar_hours)
+                overage_text = "Aşım Yok" if overage_date > end_date else f"{overage_date.strftime('%d.%m.%Y\n%H:%M:%S')}"
+            else:
+                overage_text = "--"
+            
+            daily_average = total_mb / total_active_hours if total_active_hours > 0 else 0
+            unit_text = "MB/saat"
+            daily_limit = remaining_mb / remaining_active_hours if remaining_active_hours > 0 else 0
             daily_limit_text = f"{daily_limit:.2f} MB/saat"
-            if less_than_day:
-                daily_limit_text += "\n(< 1 gün)"
         
         info_labels = [
             profit_text,
@@ -253,8 +269,19 @@ def update_labels():
         
         try:
             target_limit_mb = float(entry_target_limit.get())
-            days_for_target_limit = remaining_days - (remaining_mb / target_limit_mb) if target_limit_mb > 0 else 0
-            target_limit_date = now + timedelta(days=days_for_target_limit)
+            if unit == "Günlük":
+                days_for_target_limit = remaining_mb / target_limit_mb if target_limit_mb > 0 else 0
+                target_limit_date = now + timedelta(days=days_for_target_limit)
+            else:  # Saatlik
+                # target_limit_mb günlük MB cinsindendir, saatlik limite çeviriyoruz
+                hourly_limit = target_limit_mb * (active_hours_per_day / 24)  # Günlük limiti aktif saat oranına göre ayarlıyoruz
+                if hourly_limit > 0:
+                    hours_until_limit = remaining_mb / hourly_limit
+                    calendar_hours = hours_until_limit / active_ratio
+                    target_limit_date = now + timedelta(hours=calendar_hours)
+                else:
+                    target_limit_date = now
+                days_for_target_limit = (target_limit_date - now).total_seconds() / (24 * 3600)
             label_days_for_limit.configure(
                 text=f"{format_timedelta(timedelta(days=days_for_target_limit))}\n"
                      f"{target_limit_date.strftime('%d.%m.%Y %H:%M:%S')}"
@@ -289,7 +316,8 @@ def add_package():
             'total_gb': '0',
             'target_profit': '0',
             'target_limit': '0',
-            'unit': 'Günlük'
+            'unit': 'Günlük',
+            'active_hours': '14'
         }
         packages.append(new_package)
         update_package_combobox()
@@ -333,6 +361,8 @@ def select_package(index):
     entry_target_profit.insert(0, pkg['target_profit'])
     entry_target_limit.delete(0, tk.END)
     entry_target_limit.insert(0, pkg['target_limit'])
+    entry_active_hours.delete(0, tk.END)
+    entry_active_hours.insert(0, pkg.get('active_hours', '14'))
     unit_var.set(pkg['unit'])
     calculate()
 
@@ -353,6 +383,8 @@ def clear_input_fields():
     entry_target_profit.insert(0, '0')
     entry_target_limit.delete(0, tk.END)
     entry_target_limit.insert(0, '0')
+    entry_active_hours.delete(0, tk.END)
+    entry_active_hours.insert(0, '14')
     unit_var.set('Günlük')
     for frame in general_tab.winfo_children():
         if isinstance(frame, ttk.Frame):
@@ -382,6 +414,9 @@ style.configure('.', background='#2b2b2b', foreground='white')
 style.configure('TFrame', background='#2b2b2b')
 style.configure('TLabel', background='#2b2b2b', foreground='white')
 style.configure('TButton', background='#404040', foreground='white')
+style.map('TButton',
+          background=[('active', '#606060')],
+          foreground=[('active', 'white')])
 style.configure('TNotebook', background='#2b2b2b', foreground='white')
 style.configure('TNotebook.Tab', background='#404040', foreground='white', padding=[10, 2])
 style.configure('TLabelframe', background='#2b2b2b', foreground='white')
@@ -412,60 +447,69 @@ style.map('TNotebook.Tab',
 
 root.configure(bg='#2b2b2b')
 
-# Paket yönetimi frame'i
-package_management_frame = ttk.Frame(root)
-package_management_frame.pack(fill='x', padx=10, pady=5)
+# Üst frame'ler
+left_frame = ttk.Frame(root)
+left_frame.grid(row=0, column=0, sticky='nsew', padx=10, pady=5)
 
-ttk.Label(package_management_frame, text="Paketler:").pack(side='left', padx=5)
-package_combobox = ttk.Combobox(package_management_frame, state="readonly")
-package_combobox.pack(side='left', padx=5)
+center_frame = ttk.Frame(root)
+center_frame.grid(row=0, column=1, sticky='nsew', padx=10, pady=5)
+
+right_frame = ttk.Frame(root)
+right_frame.grid(row=0, column=2, sticky='nsew', padx=10, pady=5)
+
+# Grid yapılandırması
+root.grid_rowconfigure(0, weight=0)
+root.grid_rowconfigure(1, weight=1)
+root.grid_rowconfigure(2, weight=0)
+root.grid_columnconfigure(0, weight=1)
+root.grid_columnconfigure(1, weight=2)
+root.grid_columnconfigure(2, weight=1)
+
+# Sol taraf - Paket yönetimi
+ttk.Label(left_frame, text="Paketler:").pack(side='top', anchor='w', padx=5, pady=2)
+package_combobox = ttk.Combobox(left_frame, state="readonly")
+package_combobox.pack(side='top', fill='x', padx=5, pady=2)
 package_combobox.bind("<<ComboboxSelected>>", on_package_select)
+add_package_button = ttk.Button(left_frame, text="Yeni Paket Ekle", command=add_package)
+add_package_button.pack(side='top', fill='x', padx=5, pady=2)
+remove_package_button = ttk.Button(left_frame, text="Paketi Sil", command=remove_package)
+remove_package_button.pack(side='top', fill='x', padx=5, pady=2)
 
-add_package_button = ttk.Button(package_management_frame, text="Yeni Paket Ekle", command=add_package)
-add_package_button.pack(side='left', padx=5)
+# Orta taraf - Veri girişi
+ttk.Label(center_frame, text="Kalan MB").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+remaining_mb_inner_frame = ttk.Frame(center_frame)
+remaining_mb_inner_frame.grid(row=0, column=1, sticky='w', padx=5, pady=2)
+entry_remaining_mb = ttk.Entry(remaining_mb_inner_frame)
+entry_remaining_mb.pack(side='left')
+label_remaining_gb = ttk.Label(remaining_mb_inner_frame, text="")
+label_remaining_gb.pack(side='left', padx=2)
 
-remove_package_button = ttk.Button(package_management_frame, text="Paketi Sil", command=remove_package)
-remove_package_button.pack(side='left', padx=5)
+ttk.Label(center_frame, text="Toplam GB").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+entry_total_gb = ttk.Entry(center_frame)
+entry_total_gb.grid(row=1, column=1, sticky='w', padx=5, pady=2)
 
-# Veri giriş frame'i
-data_frame = ttk.Frame(root)
-data_frame.pack(fill='x', padx=10, pady=5)
+ttk.Label(center_frame, text="Başlangıç").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+start_datetime_entry = DateTimeEntry(center_frame)
+start_datetime_entry.grid(row=2, column=1, sticky='w', padx=5, pady=2)
 
-mb_gb_frame = ttk.Frame(data_frame)
-mb_gb_frame.pack(fill='x', padx=5, pady=5)
+ttk.Label(center_frame, text="Bitiş").grid(row=3, column=0, sticky='w', padx=5, pady=2)
+end_datetime_entry = DateTimeEntry(center_frame)
+end_datetime_entry.grid(row=3, column=1, sticky='w', padx=5, pady=2)
 
-ttk.Label(mb_gb_frame, text="Kalan MB").pack(side='left', padx=5)
-entry_remaining_mb = ttk.Entry(mb_gb_frame)
-entry_remaining_mb.pack(side='left', padx=5)
-label_remaining_gb = ttk.Label(mb_gb_frame, text="")
-label_remaining_gb.pack(side='left')
-
-ttk.Label(mb_gb_frame, text="Toplam GB").pack(side='left', padx=5)
-entry_total_gb = ttk.Entry(mb_gb_frame)
-entry_total_gb.pack(side='left', padx=5)
-
-date_frame = ttk.Frame(data_frame)
-date_frame.pack(fill='x', padx=5, pady=5)
-
-ttk.Label(date_frame, text="Başlangıç").pack(side='left', padx=5)
-start_datetime_entry = DateTimeEntry(date_frame)
-start_datetime_entry.pack(side='left', padx=5)
-
-ttk.Label(date_frame, text="Bitiş").pack(side='left', padx=5)
-end_datetime_entry = DateTimeEntry(date_frame)
-end_datetime_entry.pack(side='left', padx=5)
-
-unit_frame = ttk.Frame(data_frame)
-unit_frame.pack(fill='x', padx=5, pady=5)
-
-ttk.Label(unit_frame, text="Birim").pack(side='left', padx=5)
+# Sağ taraf - Ek ayarlar
+ttk.Label(right_frame, text="Birim").grid(row=0, column=0, sticky='w', padx=5, pady=2)
 unit_var = tk.StringVar(value="Günlük")
-unit_combobox = ttk.Combobox(unit_frame, textvariable=unit_var, values=["Günlük", "Saatlik"], state="readonly")
-unit_combobox.pack(side='left', padx=5)
+unit_combobox = ttk.Combobox(right_frame, textvariable=unit_var, values=["Günlük", "Saatlik"], state="readonly")
+unit_combobox.grid(row=0, column=1, sticky='w', padx=5, pady=2)
+
+ttk.Label(right_frame, text="Aktif Saatler").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+entry_active_hours = ttk.Entry(right_frame)
+entry_active_hours.grid(row=1, column=1, sticky='w', padx=5, pady=2)
+entry_active_hours.insert(0, '14')
 
 # Notebook
 notebook = ttk.Notebook(root)
-notebook.pack(fill='both', expand=True, padx=10, pady=5)
+notebook.grid(row=1, column=0, columnspan=3, sticky='nsew', padx=10, pady=5)
 
 general_tab = ttk.Frame(notebook)
 notebook.add(general_tab, text='Genel Bilgiler')
@@ -498,23 +542,28 @@ input_frame = ttk.Frame(targets_tab)
 input_frame.pack(fill='x', padx=5, pady=5)
 
 target_frame = ttk.Frame(input_frame)
-target_frame.pack(side='left', padx=5, fill='x', expand=True)
-ttk.Label(target_frame, text="Kâr (MB)").pack(padx=5, pady=5)
-entry_target_profit = ttk.Entry(target_frame)
-entry_target_profit.pack(padx=5, pady=5)
-label_days_for_profit = ttk.Label(target_frame, text="--", style='InfoLabel.TLabel')
-label_days_for_profit.pack(padx=5, pady=5)
-
+target_frame.grid(row=0, column=0, sticky='nsew', padx=5)
 limit_frame = ttk.Frame(input_frame)
-limit_frame.pack(side='left', padx=5, fill='x', expand=True)
-ttk.Label(limit_frame, text="Sınır (MB/Gün)").pack(padx=5, pady=5)
+limit_frame.grid(row=0, column=1, sticky='nsew', padx=5)
+input_frame.grid_columnconfigure(0, weight=1)
+input_frame.grid_columnconfigure(1, weight=1)
+
+# Target frame widgets
+ttk.Label(target_frame, text="Kâr (MB)").grid(row=0, column=0, sticky='w', padx=5, pady=5)
+entry_target_profit = ttk.Entry(target_frame)
+entry_target_profit.grid(row=1, column=0, sticky='w', padx=5, pady=5)
+label_days_for_profit = ttk.Label(target_frame, text="--", style='InfoLabel.TLabel')
+label_days_for_profit.grid(row=2, column=0, sticky='w', padx=5, pady=5)
+
+# Limit frame widgets
+ttk.Label(limit_frame, text="Sınır (MB/Gün)").grid(row=0, column=0, sticky='w', padx=5, pady=5)
 entry_target_limit = ttk.Entry(limit_frame)
-entry_target_limit.pack(padx=5, pady=5)
+entry_target_limit.grid(row=1, column=0, sticky='w', padx=5, pady=5)
 label_days_for_limit = ttk.Label(limit_frame, text="--", style='InfoLabel.TLabel')
-label_days_for_limit.pack(padx=5, pady=5)
+label_days_for_limit.grid(row=2, column=0, sticky='w', padx=5, pady=5)
 
 button_calculate = ttk.Button(root, text="Kaydet", command=calculate)
-button_calculate.pack(pady=10)
+button_calculate.grid(row=2, column=0, columnspan=3, pady=10)
 
 def on_closing():
     try:
